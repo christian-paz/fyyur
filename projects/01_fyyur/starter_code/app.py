@@ -1,7 +1,8 @@
 #----------------------------------------------------------------------------#
 # Imports
 #----------------------------------------------------------------------------#
-
+from os import name
+from models import db, Venue, Show, Artist
 from ast import Num
 from distutils.log import error
 from email.policy import default
@@ -17,7 +18,15 @@ from tempfile import tempdir
 from unittest import skip
 import dateutil.parser
 import babel
-from flask import Flask, render_template, request, Response, flash, redirect, url_for, jsonify
+from flask import (
+  Flask, 
+  render_template, 
+  request, 
+  Response, 
+  flash, 
+  redirect, 
+  url_for, 
+  jsonify)
 from flask_migrate import Migrate
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
@@ -37,7 +46,7 @@ collections.Callable = collections.abc.Callable
 app = Flask(__name__)
 moment = Moment(app)
 app.config.from_object('config')
-db = SQLAlchemy(app)
+db.init_app(app)
 
 migrate = Migrate(app, db)
 
@@ -45,69 +54,6 @@ migrate = Migrate(app, db)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres@localhost:5432/fyyur'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-#----------------------------------------------------------------------------#
-# Models.
-#----------------------------------------------------------------------------#
-
-class Show(db.Model):
-  __tablename__ = 'shows'
-  id = db.Column(db.Integer, primary_key=True)
-  artist_id = db.Column(db.Integer, db.ForeignKey('artists.id'), nullable=False)
-  venue_id = db.Column(db.Integer, db.ForeignKey('venues.id'), nullable=False)
-  start_time = db.Column(db.DateTime, nullable=False)
-
-  def __repr__(self):
-    return f'<Show id: {self.id}, artist_id: {self.artist_id}, venue_id: {self.venue_id}, start_time: {self.start_time}>'
-
-class Venue(db.Model):
-  __tablename__ = 'venues'
-
-  id = db.Column(db.Integer, primary_key=True)
-  name = db.Column(db.String,)
-  city = db.Column(db.String(120))
-  state = db.Column(db.String(120))
-  address = db.Column(db.String(120))
-  phone = db.Column(db.String(120))
-  # added genres
-  genres = db.Column(db.String)
-
-  image_link = db.Column(db.String(500))
-  facebook_link = db.Column(db.String(120))
-  # DONE: implement any missing fields, as a database migration using Flask-Migrate
-  website_link = db.Column(db.String)
-  seeking_talent = db.Column(db.Boolean,nullable=False,default=False)
-  seeking_description = db.Column(db.String)
-  
-  # Specify the relationship on the parent model for Show
-  shows = db.relationship('Show', backref='venue')
-
-  def __repr__(self):
-    return f'<Venue id: {self.id}, name: {self.name}, city: {self.city}, state: {self.state}>'
-
-class Artist(db.Model):
-  __tablename__ = 'artists'
-
-  id = db.Column(db.Integer, primary_key=True)
-  name = db.Column(db.String)
-  city = db.Column(db.String(120))
-  state = db.Column(db.String(120))
-  phone = db.Column(db.String(120))
-  genres = db.Column(db.String(120))
-  image_link = db.Column(db.String(500))
-  facebook_link = db.Column(db.String(120))
-
-  # DONE: implement any missing fields, as a database migration using Flask-Migrate
-  website_link = db.Column(db.String)
-  seeking_venue = db.Column(db.Boolean,nullable=False,default=False)
-  seeking_description = db.Column(db.String)
-  
-  # Specifies the relationship on the parent model for Show
-  shows = db.relationship('Show', backref='artist')
-
-  def __repr__(self):
-    return f'<Artist id: {self.id}, name: {self.name}, city: {self.city}, state: {self.state}>'
-
-# DONE Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
 
 #----------------------------------------------------------------------------#
 # Filters.
@@ -196,7 +142,6 @@ def venues():
       'venues': list(venues)
     }
     data.append(show_city_venue)
-
     
   return render_template('pages/venues.html', areas=data);
 
@@ -250,7 +195,7 @@ def show_venue(venue_id):
   data = {
     'id': venue.id,
     'name': venue.name,
-    'generes': venue.genres,
+    'genres': [venue.genres],
     'address': venue.address,
     'city': venue.city,
     'state': venue.state,
@@ -484,22 +429,24 @@ def edit_artist_submission(artist_id):
     artist = Artist.query.get(artist_id)
 
     artist.name = form.name.data
-    artist.genres = form.genres.data
     artist.city = form.city.data
     artist.state = form.state.data
     artist.phone = form.phone.data
-    artist.website = form.website.data
+    artist.image_link = form.image_link.data
+    artist.genres = form.genres.data
     artist.facebook_link = form.facebook_link.data
+    artist.website_link = form.website_link.data
     artist.seeking_venue = form.seeking_venue.data
     artist.seeking_description = form.seeking_description.data
-    artist.image_link = form.image_link.data
-
+  
     db.session.add(artist)
     db.session.commit()
-    flash('Artist ' + request.form.name + ' was successfully edited!')
+    flash('Artist ' + request.form['name'] + ' was successfully edited!')
   except:
     db.session.rollback()
-    flash('Artist was not successfully edited!')
+    flash('Artist ' + request.form['name'] +  ' was not successfully edited!')
+    print(sys.exc_info)
+
   finally:
     db.session.close()
   return redirect(url_for('show_artist', artist_id=artist_id))
